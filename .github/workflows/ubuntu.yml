@@ -24,3 +24,9 @@ jobs:
     - name: build
       working-directory: src/build
       run: make -j2
+
+    - name: Upload built binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: ect-ubuntu-x86-64
+        path: src/build/ect
