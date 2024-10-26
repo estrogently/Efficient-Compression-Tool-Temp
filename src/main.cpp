@@ -1,7 +1,7 @@
 //  main.cpp
 //  Efficient Compression Tool
 //  Created by Felix Hanau on 12/19/14.
-//  Copyright (c) 2014-2023 Felix Hanau.
+//  Copyright (c) 2014-2024 Felix Hanau.
 
 #include "main.h"
 #include "support.h"
@@ -31,8 +31,8 @@ static std::atomic<long long> savings;
 static void Usage() {
     printf (
             "Efficient Compression Tool\n"
-            "(c) 2014-2023 Felix Hanau.\n"
-            "Version 0.9.4"
+            "(c) 2014-2024 Felix Hanau.\n"
+            "Version 0.9.5"
 #ifdef __DATE__
             " compiled on %s\n"
 #endif
@@ -309,17 +309,15 @@ unsigned fileHandler(const char * Infile, const ECTOptions& Options, int interna
         }
         int statcompressedfile = 0;
         if (size < 1200000000) {//completely random value
-            if (x == "PNG" || x == "png"){
-                error = OptimizePNG(Infile, Options);
-            }
-            else if (x == "jpg" || x == "JPG" || x == "JPEG" || x == "jpeg"){
-                error = OptimizeJPEG(Infile, Options);
-            }
-            else if (Options.Gzip && !internal){
+            if (Options.Gzip && !internal) {
                 statcompressedfile = ECTGzip(Infile, Options.Mode, Options.DeflateMultithreading, size, Options.Zip, Options.Strict);
                 if (statcompressedfile == 2){
                     return 1;
                 }
+            } else if (x == "PNG" || x == "png") {
+                error = OptimizePNG(Infile, Options);
+            } else if (x == "jpg" || x == "JPG" || x == "JPEG" || x == "jpeg") {
+                error = OptimizeJPEG(Infile, Options);
             }
             if(Options.SavingsCounter && !internal){
                 processedfiles.fetch_add(1);
@@ -351,7 +349,7 @@ unsigned zipHandler(std::vector<int> args, const char * argv[], int files, const
     size_t local_bytes = 0;
     unsigned i = 0;
     time_t t = -1;
-    if((extension=="zip" || extension=="ZIP" || IsZIP(argv[args[0]])) && !isDirectory(argv[args[0]])){
+    if((extension=="zip" || extension=="ZIP" || IsZIP(argv[args[0]]) == 1) && !isDirectory(argv[args[0]])){
         i++;
         if(exists(argv[args[0]])){
             local_bytes += filesize(zipfilename.c_str());
@@ -359,22 +357,35 @@ unsigned zipHandler(std::vector<int> args, const char * argv[], int files, const
                 t = get_file_time(argv[args[0]]);
             }
         }
-    }
-    else{
+    } else {
         //Construct name
-        if(!isDirectory(argv[args[0]])
+        if (!isDirectory(argv[args[0]])
 #ifdef FS_SUPPORTED
            && std::filesystem::is_regular_file(argv[args[0]])
 #endif
-           ){
-            if(zipfilename.find_last_of(".") > zipfilename.find_last_of("/\\")) {
+           ) {
+            // Cut off file extension, but handle file names beginning with a dot correctly
+            if(zipfilename.find_last_of(".") > zipfilename.find_last_of("/\\") + 1) {
                 zipfilename = zipfilename.substr(0, zipfilename.find_last_of("."));
             }
+        } else {
+            // Work around relative directory names ending in '.' or '..'
+            // TODO: Implement a proper file name parser and use the absolute path in all cases.
+#ifndef _WIN32
+            char abs_path[PATH_MAX];
+            if (!realpath(argv[args[0]], abs_path)) {
+#else
+            char abs_path[MAX_PATH];
+            if (!GetFullPathNameA(argv[args[0]], MAX_PATH, abs_path, 0)) {
+#endif
+                printf("Error: Could not find directory\n");
+                return 1;
+            }
+            zipfilename = abs_path;
+            if(zipfilename.back() == '/' || zipfilename.back() == '\\') {
+                zipfilename.pop_back();
+            }
         }
-        else if(zipfilename.back() == '/' || zipfilename.back() == '\\'){
-            zipfilename.pop_back();
-        }
-
         zipfilename += ".zip";
         if(exists(zipfilename.c_str())){
             printf("Error: ZIP file for chosen file/folder already exists, but is not listed.\n");
